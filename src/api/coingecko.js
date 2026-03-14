@@ -1,4 +1,4 @@
-var BASE_URL = "https://api.coingecko.com/api/v3";
+var BASE_URL = "https://corsproxy.io/?https://api.coingecko.com/api/v3";
 
 function delay(ms) {
   return new Promise(function(resolve) { setTimeout(resolve, ms); });
