@@ -1,122 +1,310 @@
 import React, { useState } from "react";
-import CoinRow from "./CoinRow";
-import { getSlotStyle } from "../utils/format";
 
-var SLOT_INFO = {
-  B: { timeframe: "Buy tonight — Sell tomorrow", target: "+15% gross", stop: "-8%", strategy: "Strong momentum + volume surge" },
-  A: { timeframe: "Buy tomorrow night — Sell day after", target: "+15% gross", stop: "-8%", strategy: "Steady build + trend confirmation" },
-  C: { timeframe: "Hold days to weeks", target: "+25% gross", stop: "-12%", strategy: "High volatility + repeat spike patterns" },
-  W: { timeframe: "Your manual picks", target: "Varies", stop: "Varies", strategy: "Coins you want to track personally" },
+var slotMeta = {
+  B: {
+    label: "Tonight's Picks",
+    sublabel: "Buy tonight — Sell tomorrow",
+    color: "#00e676",
+    icon: "🔥",
+  },
+  A: {
+    label: "Tomorrow's Picks",
+    sublabel: "Buy tomorrow night — Sell day after",
+    color: "#00b0ff",
+    icon: "🌅",
+  },
+  R: {
+    label: "Multi-day Runners",
+    sublabel: "Sustained momentum — still has legs",
+    color: "#e040fb",
+    icon: "🚀",
+  },
+  D: {
+    label: "Dip Buys",
+    sublabel: "Pullback on low volume — bounce in 1-2 days",
+    color: "#ff9100",
+    icon: "📉",
+  },
+  C: {
+    label: "Moonshots",
+    sublabel: "High risk · High reward",
+    color: "#ff5252",
+    icon: "⚡",
+  },
+  W: {
+    label: "My Watchlist",
+    sublabel: "Your tracked coins — best signal shown",
+    color: "#7c4dff",
+    icon: "👁",
+  },
 };
 
-var COLUMNS = [
-  { key: "index", label: "#", align: "left" },
-  { key: "base", label: "Coin", align: "left" },
-  { key: "slot", label: "Slot", align: "left" },
-  { key: "lastPrice", label: "Price", align: "right" },
-  { key: "change24h", label: "24h %", align: "right" },
-  { key: "score", label: "Score", align: "right" },
-  { key: "signal", label: "Signal", align: "center" },
-  { key: "grossTargetPercent", label: "Target", align: "right" },
-  { key: "stopPercent", label: "Stop", align: "right" },
-  { key: "suggestedAmountINR", label: "Invest", align: "right" },
-  { key: "expand", label: "", align: "center" },
-];
+function SignalBadge({ signal }) {
+  var colors = {
+    "STRONG BUY": { bg: "#00e67622", color: "#00e676" },
+    "BUY": { bg: "#69f0ae22", color: "#69f0ae" },
+    "WATCH": { bg: "#ffeb3b22", color: "#ffeb3b" },
+    "WEAK": { bg: "#ff910022", color: "#ff9100" },
+    "AVOID": { bg: "#ff525222", color: "#ff5252" },
+  };
+  var c = colors[signal] || { bg: "#60606022", color: "#9e9e9e" };
+  return (
+    <span style={{
+      background: c.bg, color: c.color,
+      borderRadius: "4px", padding: "2px 8px",
+      fontSize: "0.7rem", fontWeight: 700,
+    }}>
+      {signal}
+    </span>
+  );
+}
 
-export default function BucketPanel({ slotType, coins, defaultExpanded }) {
-  var [collapsed, setCollapsed] = useState(!defaultExpanded);
-  var [sortKey, setSortKey] = useState("score");
-  var [sortDir, setSortDir] = useState("desc");
+function PairBadge({ quote }) {
+  return (
+    <span style={{
+      background: quote === "USDT" ? "#ff980022" : "#2196f322",
+      color: quote === "USDT" ? "#ff9800" : "#2196f3",
+      borderRadius: "4px", padding: "2px 6px",
+      fontSize: "0.65rem", fontWeight: 700, marginLeft: "4px",
+    }}>
+      {quote}
+    </span>
+  );
+}
 
-  var slotStyle = getSlotStyle(slotType);
-  var info = SLOT_INFO[slotType] || SLOT_INFO.B;
-  var coinList = coins || [];
+function BothPairsBadge() {
+  return (
+    <span style={{
+      background: "#00e5ff22", color: "#00e5ff",
+      borderRadius: "4px", padding: "2px 6px",
+      fontSize: "0.62rem", fontWeight: 700, marginLeft: "4px",
+    }}>
+      INR+USDT
+    </span>
+  );
+}
 
-  var sorted = coinList.slice().sort(function(a, b) {
-    if (sortKey === "index" || sortKey === "expand") return 0;
-    var aVal = a[sortKey];
-    var bVal = b[sortKey];
-    if (aVal === undefined || aVal === null) return 1;
-    if (bVal === undefined || bVal === null) return -1;
-    if (typeof aVal === "string") return sortDir === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-    return sortDir === "asc" ? aVal - bVal : bVal - aVal;
-  });
+function CoinRow({ coin, index }) {
+  var [expanded, setExpanded] = useState(false);
 
-  function handleSort(key) {
-    if (key === "index" || key === "expand") return;
-    if (sortKey === key) {
-      setSortDir(sortDir === "asc" ? "desc" : "asc");
-    } else {
-      setSortKey(key);
-      setSortDir("desc");
-    }
-  }
+  var changeColor = coin.change24h >= 0 ? "#00e676" : "#ff5252";
+  var volDisplay = coin.quote === "INR"
+    ? "₹" + (coin.volumeINR >= 1000000
+        ? (coin.volumeINR / 1000000).toFixed(1) + "M"
+        : (coin.volumeINR / 1000).toFixed(0) + "K")
+    : (coin.volume24h >= 1000000
+        ? (coin.volume24h / 1000000).toFixed(1) + "M"
+        : (coin.volume24h / 1000).toFixed(0) + "K") + " " + coin.quote;
 
   return (
-    <div className="slot-panel">
-
-      <div className="slot-header">
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <span className="slot-badge" style={{ background: slotStyle.bg, color: slotStyle.color, border: "1px solid " + slotStyle.border }}>
-            {slotStyle.label}
-          </span>
-          <div>
-            <div className="slot-title">{slotStyle.sublabel}</div>
-            <div className="slot-sub">{info.strategy}</div>
+    <>
+      <tr
+        onClick={function() { setExpanded(function(p) { return !p; }); }}
+        style={{ cursor: "pointer" }}
+      >
+        <td style={{ color: "#607d8b", width: "32px" }}>{index + 1}</td>
+        <td>
+          <div style={{ fontWeight: 700, fontSize: "0.88rem" }}>
+            {coin.base}
+            <PairBadge quote={coin.quote} />
+            {coin.hasBothPairs && <BothPairsBadge />}
           </div>
+          <div style={{ fontSize: "0.7rem", color: "#607d8b", marginTop: "2px" }}>
+            {coin.fullName !== coin.base ? coin.fullName : ""}
+          </div>
+        </td>
+        <td style={{ fontSize: "0.85rem" }}>
+          {coin.quote === "INR"
+            ? "₹" + coin.lastPrice.toLocaleString("en-IN", { maximumFractionDigits: 4 })
+            : coin.lastPrice.toFixed(4) + " USDT"}
+        </td>
+        <td style={{ color: changeColor, fontWeight: 700, fontSize: "0.85rem" }}>
+          {(coin.change24h >= 0 ? "+" : "") + coin.change24h.toFixed(2) + "%"}
+        </td>
+        <td style={{ fontSize: "0.78rem", color: "#9e9e9e" }}>{volDisplay}</td>
+        <td>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <div style={{
+              width: "36px", height: "6px", background: "#1e2a3a",
+              borderRadius: "3px", overflow: "hidden",
+            }}>
+              <div style={{
+                width: Math.min(100, coin.score) + "%",
+                height: "100%",
+                background: coin.score >= 75 ? "#00e676" : coin.score >= 55 ? "#ffeb3b" : "#ff9100",
+                borderRadius: "3px",
+              }} />
+            </div>
+            <span style={{ fontSize: "0.75rem", color: "#e0e6f0" }}>{coin.score}</span>
+          </div>
+        </td>
+        <td><SignalBadge signal={coin.signal} /></td>
+        <td style={{ fontSize: "0.78rem", color: "#00e676" }}>
+          {coin.quote === "INR"
+            ? "₹" + coin.targetPrice.toLocaleString("en-IN", { maximumFractionDigits: 4 })
+            : coin.targetPrice.toFixed(4)}
+        </td>
+        <td style={{ fontSize: "0.78rem", color: "#ff5252" }}>
+          {coin.quote === "INR"
+            ? "₹" + coin.stopPrice.toLocaleString("en-IN", { maximumFractionDigits: 4 })
+            : coin.stopPrice.toFixed(4)}
+        </td>
+        <td style={{ fontSize: "0.78rem", fontWeight: 700, color: "#00e5ff" }}>
+          {coin.amountCurrency === "USDT"
+            ? coin.suggestedAmount + " USDT"
+            : "₹" + coin.suggestedAmount.toLocaleString("en-IN")}
+        </td>
+      </tr>
+
+      {expanded && (
+        <tr>
+          <td colSpan={10} style={{ background: "#ffffff05", padding: "12px 16px" }}>
+            <div style={{ display: "flex", gap: "24px", flexWrap: "wrap" }}>
+
+              {/* Entry details */}
+              <div>
+                <div style={{ fontSize: "0.7rem", color: "#607d8b", marginBottom: "6px", textTransform: "uppercase" }}>
+                  Trade Details
+                </div>
+                <div style={{ fontSize: "0.78rem", color: "#e0e6f0", lineHeight: "1.8" }}>
+                  <div>Entry: <strong>{coin.quote === "INR" ? "₹" : ""}{coin.entryPrice?.toFixed(4)} {coin.quote !== "INR" ? coin.quote : ""}</strong></div>
+                  <div>Target: <strong style={{ color: "#00e676" }}>+{coin.grossTargetPercent?.toFixed(1)}% gross</strong></div>
+                  <div>Stop: <strong style={{ color: "#ff5252" }}>-{coin.stopPercent?.toFixed(1)}%</strong></div>
+                  <div>Hold: <strong>{coin.holdTime}</strong></div>
+                  <div>Spread: <strong>{coin.spread?.toFixed(2)}%</strong></div>
+                </div>
+              </div>
+
+              {/* Reasons */}
+              <div style={{ flex: 1, minWidth: "200px" }}>
+                <div style={{ fontSize: "0.7rem", color: "#607d8b", marginBottom: "6px", textTransform: "uppercase" }}>
+                  Why this coin
+                </div>
+                {(coin.reasons || []).map(function(r, i) {
+                  return (
+                    <div key={i} style={{
+                      fontSize: "0.75rem", color: "#e0e6f0",
+                      padding: "2px 0", display: "flex", alignItems: "center", gap: "6px",
+                    }}>
+                      <span style={{ color: "#00e676" }}>✓</span> {r}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Warnings */}
+              {coin.warnings && coin.warnings.length > 0 && (
+                <div style={{ flex: 1, minWidth: "200px" }}>
+                  <div style={{ fontSize: "0.7rem", color: "#ff9100", marginBottom: "6px", textTransform: "uppercase" }}>
+                    Warnings
+                  </div>
+                  {coin.warnings.map(function(w, i) {
+                    return (
+                      <div key={i} style={{
+                        fontSize: "0.75rem", color: "#ff9100",
+                        padding: "2px 0", display: "flex", alignItems: "center", gap: "6px",
+                      }}>
+                        <span>⚠</span> {w}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Range position */}
+              <div style={{ minWidth: "140px" }}>
+                <div style={{ fontSize: "0.7rem", color: "#607d8b", marginBottom: "6px", textTransform: "uppercase" }}>
+                  24h Range Position
+                </div>
+                <div style={{ background: "#1e2a3a", borderRadius: "4px", height: "8px", position: "relative", marginBottom: "4px" }}>
+                  <div style={{
+                    position: "absolute",
+                    left: Math.min(95, coin.rangePosition * 100) + "%",
+                    top: "-3px", width: "2px", height: "14px",
+                    background: "#00e5ff", borderRadius: "1px",
+                  }} />
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.65rem", color: "#607d8b" }}>
+                  <span>Low</span>
+                  <span style={{ color: "#00e5ff" }}>{(coin.rangePosition * 100).toFixed(0) + "%"}</span>
+                  <span>High</span>
+                </div>
+              </div>
+
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+export default function BucketPanel({ slotType, coins, defaultExpanded }) {
+  var [expanded, setExpanded] = useState(defaultExpanded !== false);
+  var meta = slotMeta[slotType] || slotMeta["B"];
+
+  return (
+    <div style={{ marginBottom: "20px" }}>
+      <div
+        style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          padding: "12px 16px", cursor: "pointer",
+          background: "#0d1220", borderRadius: expanded ? "12px 12px 0 0" : "12px",
+          border: "1px solid " + meta.color + "33",
+          borderBottom: expanded ? "none" : "1px solid " + meta.color + "33",
+        }}
+        onClick={function() { setExpanded(function(p) { return !p; }); }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <span style={{
+            background: meta.color + "22", color: meta.color,
+            borderRadius: "6px", padding: "4px 10px",
+            fontSize: "0.78rem", fontWeight: 700,
+          }}>
+            {meta.icon + " " + meta.label}
+          </span>
+          <span style={{ color: "#607d8b", fontSize: "0.78rem" }}>{meta.sublabel}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <span style={{ fontSize: "12px", color: "#555", background: "#1a1a2e", border: "1px solid #2a2a3e", borderRadius: "20px", padding: "3px 12px" }}>
-            {coinList.length + " candidates"}
+          <span style={{
+            background: "#1e2a3a", borderRadius: "20px",
+            padding: "2px 12px", fontSize: "0.72rem", color: "#9e9e9e",
+          }}>
+            {coins.length + " candidates"}
           </span>
-          <button className="toggle-btn" onClick={function() { setCollapsed(!collapsed); }}>
-            {collapsed ? "Show ▼" : "Hide ▲"}
-          </button>
+          <span style={{ color: "#607d8b", fontSize: "0.8rem" }}>
+            {expanded ? "Hide ▲" : "Show ▼"}
+          </span>
         </div>
       </div>
 
-      {!collapsed && (
-        <div>
-          <div className="info-bar">
-            <span>Timeframe: <strong style={{ color: "#aaa" }}>{info.timeframe}</strong></span>
-            <span>Target: <strong style={{ color: "#00e676" }}>{info.target}</strong></span>
-            <span>Stop: <strong style={{ color: "#ff5252" }}>{info.stop}</strong></span>
+      {expanded && (
+        <div style={{
+          border: "1px solid " + meta.color + "33",
+          borderTop: "none", borderRadius: "0 0 12px 12px",
+          overflow: "hidden",
+        }}>
+          {/* Strategy row */}
+          <div style={{
+            padding: "8px 16px", background: "#ffffff05",
+            fontSize: "0.72rem", color: "#607d8b",
+            display: "flex", gap: "20px", flexWrap: "wrap",
+          }}>
+            <span>Timeframe: <strong style={{ color: "#e0e6f0" }}>{meta.sublabel}</strong></span>
+            <span>Target: <strong style={{ color: "#00e676" }}>+15% gross</strong></span>
+            <span>Stop: <strong style={{ color: "#ff5252" }}>-8%</strong></span>
           </div>
 
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  {COLUMNS.map(function(col) {
-                    return (
-                      <th
-                        key={col.key}
-                        className={col.align === "right" ? "right" : col.align === "center" ? "center" : ""}
-                        onClick={function() { handleSort(col.key); }}
-                      >
-                        {col.label}{sortKey === col.key ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.length === 0 ? (
-                  <tr>
-                    <td colSpan={11} style={{ textAlign: "center", padding: "40px", color: "#333", fontSize: "14px" }}>
-                      No candidates found for this slot right now.
-                    </td>
-                  </tr>
-                ) : (
-                  sorted.map(function(coin, i) {
-                    return <CoinRow key={coin.market + "-" + i} coin={coin} index={i} />;
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+          {coins.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "30px", color: "#607d8b", fontSize: "0.82rem" }}>
+              No candidates found for this slot right now.
+            </div>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#111827" }}>
+                    {["#", "Coin", "Price", "24H %", "Volume", "Score", "Signal", "Target", "Stop", "Invest"].map(function(h) {
+                      return (
+                        <th key={h} style={{
+                          padding: "8px 12px", textAlign
