@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Advisor</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { background: #0a0a14; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: #0a0a14; }
+      ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+      .wrapper { padding: 24px; max-width: 1400px; margin: 0 auto; }
+      .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid #1a1a2e; padding-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+      .title { font-size: 26px; font-weight: 800; color: #00e5ff; letter-spacing: 1px; }
+      .subtitle { font-size: 12px; color: #444; margin-top: 4px; }
+      .btn { background: #00e5ff22; border: 1px solid #00e5ff; color: #00e5ff; border-radius: 8px; padding: 8px 20px; cursor: pointer; font-size: 13px; font-weight: 600; }
+      .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      .badge { background: #1a1a2e; border: 1px solid #2a2a3e; border-radius: 20px; padding: 4px 14px; font-size: 12px; color: #555; }
+      .error-box { background: #1a1a2e; border: 1px solid #ff525244; border-radius: 10px; padding: 14px 18px; color: #ff5252; margin-bottom: 20px; font-size: 13px; }
+      .loading-box { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 20px; gap: 16px; }
+      .spinner { width: 40px; height: 40px; border: 3px solid #1a1a2e; border-top: 3px solid #00e5ff; border-radius: 50%; animation: spin 1s linear infinite; }
+      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+      .loading-title { color: #00e5ff; font-size: 16px; font-weight: 600; }
+      .loading-step { color: #444; font-size: 13px; }
+      .stats-row { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+      .stat-card { background: #1a1a2e; border: 1px solid #222; border-radius: 10px; padding: 14px 20px; flex: 1; min-width: 130px; }
+      .stat-label { font-size: 11px; color: #555; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+      .stat-value { font-size: 20px; font-weight: 700; color: #00e5ff; }
+      .stat-sub { font-size: 12px; color: #666; margin-top: 4px; }
+      .control-panel { background: #1a1a2e; border: 1px solid #00e5ff33; border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+      .control-title { font-size: 15px; font-weight: 700; color: #00e5ff; margin-bottom: 16px; }
+      .control-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; margin-bottom: 16px; }
+      .control-card { background: #0a0a14; border: 1px solid #333; border-radius: 10px; padding: 12px 14px; }
+      .control-label { font-size: 11px; color: #555; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+      .control-input { width: 100%; background: #1a1a2e; border: 1px solid #333; border-radius: 6px; padding: 8px 10px; color: #fff; font-size: 16px; font-weight: 700; outline: none; }
+      .control-sub { font-size: 11px; color: #444; margin-top: 6px; }
+      .chart-area { background: #0a0a14; border: 1px solid #333; border-radius: 10px; padding: 16px; }
+      .chart-title { font-size: 12px; color: #666; margin-bottom: 12px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+      .proj-row { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+      .proj-card { flex: 1; background: #1a1a2e; border-radius: 8px; padding: 10px 14px; min-width: 120px; }
+      .proj-label { font-size: 11px; color: #555; margin-bottom: 4px; }
+      .proj-value { font-size: 16px; font-weight: 700; }
+      .day-labels { display: flex; justify-content: space-between; margin-top: 6px; }
+      .day-label { font-size: 11px; color: #444; text-align: center; flex: 1; }
+      .day-label.today { color: #00e5ff; font-weight: 700; }
+      .filters { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+      .filter-label { font-size: 12px; color: #444; font-weight: 600; }
+      .filter-btn { padding: 6px 14px; border-radius: 8px; border: 1px solid #333; background: #1a1a2e; color: #666; font-size: 12px; cursor: pointer; font-weight: 600; }
+      .filter-btn.active-cyan { background: #00e5ff15; border-color: #00e5ff; color: #00e5ff; }
+      .filter-btn.active-green { background: #00e67615; border-color: #00e676; color: #00e676; }
+      .filter-btn.active-blue { background: #00b0ff15; border-color: #00b0ff; color: #00b0ff; }
+      .filter-btn.active-orange { background: #ff910015; border-color: #ff9100; color: #ff9100; }
+      .filter-btn.active-purple { background: #7c4dff15; border-color: #7c4dff; color: #7c4dff; }
+      .watchlist-box { background: #1a1a2e; border: 1px solid #7c4dff44; border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+      .watchlist-title { font-size: 14px; font-weight: 700; color: #7c4dff; margin-bottom: 4px; }
+      .watchlist-input-row { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+      .watchlist-input { flex: 1; min-width: 200px; background: #0a0a14; border: 1px solid #333; border-radius: 8px; padding: 10px 14px; color: #e0e0e0; font-size: 14px; outline: none; }
+      .watchlist-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+      .watchlist-tag { display: flex; align-items: center; gap: 6px; background: #7c4dff15; border: 1px solid #7c4dff44; border-radius: 20px; padding: 4px 12px; font-size: 13px; color: #7c4dff; font-weight: 600; }
+      .tag-remove { cursor: pointer; color: #555; font-size: 16px; font-weight: bold; }
+      .slot-panel { margin-bottom: 28px; }
+      .slot-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+      .slot-badge { padding: 6px 16px; border-radius: 8px; font-size: 13px; font-weight: 700; }
+      .slot-title { font-size: 15px; font-weight: 700; color: #fff; }
+      .slot-sub { font-size: 12px; color: #444; }
+      .toggle-btn { background: #1a1a2e; border: 1px solid #2a2a3e; border-radius: 8px; color: #666; font-size: 12px; padding: 6px 14px; cursor: pointer; }
+      .info-bar { display: flex; gap: 20px; flex-wrap: wrap; background: #1a1a2e; border: 1px solid #2a2a3e; border-radius: 8px; padding: 10px 16px; margin-bottom: 12px; font-size: 12px; color: #555; }
+      .table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid #1a1a2e; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th { background: #1a1a2e; color: #444; padding: 10px 14px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #222; white-space: nowrap; cursor: pointer; user-select: none; }
+      th.right { text-align: right; }
+      th.center { text-align: center; }
+      td { padding: 11px 14px; font-size: 13px; color: #ccc; vertical-align: middle; border-bottom: 1px solid #1a1a2e; }
+      td.right { text-align: right; }
+      td.center { text-align: center; }
+      tr.coin-row { cursor: pointer; transition: background 0.15s; }
+      tr.expanded-row { background: #12121f; }
+      .coin-cell { display: flex; align-items: center; gap: 10px; }
+      .coin-img { width: 28px; height: 28px; border-radius: 50%; background: #333; object-fit: cover; flex-shrink: 0; }
+      .coin-placeholder { width: 28px; height: 28px; border-radius: 50%; background: #333; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #666; font-weight: bold; flex-shrink: 0; }
+      .coin-name { font-weight: 700; color: #fff; font-size: 14px; }
+      .coin-sub { font-size: 11px; color: #444; margin-top: 2px; }
+      .score-bar-wrap { width: 55px; height: 4px; background: #333; border-radius: 2px; margin-left: auto; margin-top: 4px; overflow: hidden; }
+      .expanded-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 14px; }
+      .info-card { background: #1a1a2e; border-radius: 8px; padding: 12px 14px; }
+      .info-label { font-size: 11px; color: #444; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+      .info-value { font-size: 15px; font-weight: 700; color: #fff; }
+      .info-sub { font-size: 11px; color: #555; margin-top: 3px; }
+      .range-bar { height: 5px; background: #333; border-radius: 3px; margin-top: 8px; overflow: hidden; }
+      .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+      .signal-tag { font-size: 11px; padding: 3px 8px; border-radius: 4px; background: #00e67615; color: #00e676; border: 1px solid #00e67630; }
+      .warning-tag { font-size: 11px; padding: 3px 8px; border-radius: 4px; background: #ff525215; color: #ff5252; border: 1px solid #ff525230; }
+      .trade-box { background: #0a0a14; border: 1px solid #2a2a3e; border-radius: 10px; padding: 16px; margin-top: 12px; }
+      .trade-title { font-size: 12px; color: #00e5ff; font-weight: 700; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+      .trade-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+      .trade-item { background: #1a1a2e; border-radius: 8px; padding: 10px 12px; text-align: center; }
+      .trade-label { font-size: 11px; color: #444; margin-bottom: 4px; }
+      .trade-value { font-size: 14px; font-weight: 700; }
+      .section-title { font-size: 11px; color: #333; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; margin-top: 14px; }
+      .divider { height: 1px; background: #1a1a2e; margin: 24px 0; }
+      .disclaimer { margin-top: 40px; padding: 14px 18px; background: #1a1a2e; border-radius: 10px; font-size: 11px; color: #333; line-height: 1.6; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
