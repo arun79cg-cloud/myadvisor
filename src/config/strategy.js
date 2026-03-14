@@ -22,6 +22,20 @@ const strategy = {
     panicThreshold: -7,       // BTC down >7% = PANIC, no buys
     rotationThreshold: -3,    // BTC down 3-7% = ROTATION, alt signals boosted
     altSeasonThreshold: 3,    // BTC up >3% + ETH up = ALT SEASON
+  fees: {
+    inr: {
+      tradingFee: 0.001,
+      gstOnFee: 0.18,
+      tdsSell: 0.0001,
+    },
+    usdt: {
+      tradingFee: 0.001,
+      gstOnFee: 0.18,
+      tdsBuy: 0.0001,
+      tdsSell: 0.0001,
+    },
+  },
+
   },
 
   // Slot B — Tonight's Picks
@@ -114,5 +128,14 @@ const strategy = {
     volumeRisingBonus: 8,
   },
 };
+export function getRoundTripCost(quote) {
+  if (quote === "INR") return 0.4;
+  return 0.3;
+}
+
+export function getNetTarget(quote, grossTarget) {
+  var cost = getRoundTripCost(quote);
+  return parseFloat((grossTarget - cost).toFixed(2));
+}
 
 export default strategy;
