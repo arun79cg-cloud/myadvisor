@@ -1,5 +1,9 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "framework": "vite"
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/api/tickers", "destination": "https://api.coindcx.com/exchange/ticker" },
+    { "source": "/api/markets", "destination": "https://api.coindcx.com/exchange/v1/markets_details" }
+  ]
 }
