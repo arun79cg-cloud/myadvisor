@@ -1,6 +1,41 @@
+const CORS = "https://corsproxy.io/?";
+
+export async function fetchMarketContext() {
+  try {
+    var btcRes = await fetch("/api/tickers");
+    var tickers = await btcRes.json();
+    var btc = tickers.find(function(t) { return t.market === "BTCINR"; });
+    var eth = tickers.find(function(t) { return t.market === "ETHINR"; });
+    var btcChange = btc ? parseFloat(btc.change_24_hour) || 0 : 0;
+    var ethChange = eth ? parseFloat(eth.change_24_hour) || 0 : 0;
+
+    var mode = "NEUTRAL";
+    if (btcChange <= -7) mode = "PANIC";
+    else if (btcChange <= -3) mode = "ROTATION";
+    else if (btcChange >= 3 && ethChange >= 2) mode = "ALT SEASON";
+    else if (btcChange < 0) mode = "CAUTION";
+    else mode = "NEUTRAL";
+
+    var usdtTicker = tickers.find(function(t) { return t.market === "USDTINR"; });
+    var usdtRate = usdtTicker ? parseFloat(usdtTicker.last_price) || 86 : 86;
+
+    return {
+      btcPrice: btc ? parseFloat(btc.last_price) || 0 : 0,
+      btcChange: btcChange,
+      ethChange: ethChange,
+      marketMode: mode,
+      usdtRate: usdtRate,
+    };
+  } catch (e) {
+    return { btcPrice: 0, btcChange: 0, ethChange: 0, marketMode: "NEUTRAL", usdtRate: 86 };
+  }
+}
+
 export async function fetchCoinDCXData() {
   var res = await fetch("/api/tickers");
   var tickers = await res.json();
+
+  var pairMap = {};
 
   var merged = tickers
     .map(function(t) {
@@ -33,7 +68,9 @@ export async function fetchCoinDCXData() {
       var rangePosition = rangeSize > 0 ? (lastPrice - low24h) / rangeSize : 0.5;
       var spread = ask > 0 && bid > 0 ? ((ask - bid) / ask) * 100 : 0;
 
-      return {
+      var volumeINR = quote === "INR" ? volume24h * lastPrice : 0;
+
+      var coin = {
         market: market,
         base: base,
         quote: quote,
@@ -45,6 +82,7 @@ export async function fetchCoinDCXData() {
         ask: ask,
         spread: parseFloat(spread.toFixed(4)),
         volume24h: volume24h,
+        volumeINR: volumeINR,
         change24h: change24h,
         rangePosition: parseFloat(rangePosition.toFixed(4)),
         status: "active",
@@ -52,9 +90,30 @@ export async function fetchCoinDCXData() {
         maxQuantity: 0,
         basePrecision: 8,
         quotePrecision: 2,
+        hasBothPairs: false,
       };
+
+      if (!pairMap[base]) pairMap[base] = {};
+      pairMap[base][quote] = true;
+
+      return coin;
     })
     .filter(Boolean);
+
+  // Mark coins that trade on both INR and USDT pairs
+  merged = merged.map(function(coin) {
+    if (pairMap[coin.base] && pairMap[coin.base]["INR"] && pairMap[coin.base]["USDT"]) {
+      coin.hasBothPairs = true;
+    }
+    return coin;
+  });
+
+  // Volume filter — minimum ₹5 lakh for INR, minimum 5000 USDT notional for USDT pairs
+  merged = merged.filter(function(coin) {
+    if (coin.quote === "INR") return coin.volumeINR >= 500000;
+    if (coin.quote === "USDT") return coin.volume24h * coin.lastPrice >= 5000;
+    return false;
+  });
 
   return merged;
 }
