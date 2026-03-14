@@ -50,11 +50,89 @@ function scoreVolatility(volatilityPct, slotConfig) {
   return 40;
 }
 
-export function scoreCoin(coin, slotType) {
+function scoreDipBuy(coin) {
+  // Price down but on low volume = accumulation = good dip buy
+  var change = coin.change24h || 0;
+  var rangePos = coin.rangePosition || 0.5;
+  var spread = coin.spread || 0;
+
+  var score = 0;
+  // Price pulling back
+  if (change < -1 && change > -15) score += 30;
+  // Near low of range = good entry
+  if (rangePos <= 0.30) score += 40;
+  else if (rangePos <= 0.45) score += 25;
+  // Tight spread = liquidity is there
+  if (spread < 0.5) score += 20;
+  else if (spread < 1.0) score += 10;
+  // Volume low on dip = weak selling
+  var volINR = coin.volumeINR || 0;
+  if (volINR > 500000 && volINR < 3000000) score += 10;
+
+  return Math.min(100, score);
+}
+
+function scoreRunner(coin) {
+  // Coins sustaining momentum over multiple days
+  var change = coin.change24h || 0;
+  var rangePos = coin.rangePosition || 0.5;
+  var volINR = coin.volumeINR || 0;
+  var hasBoth = coin.hasBothPairs || false;
+
+  var score = 0;
+  // Strong positive change
+  if (change >= 10) score += 40;
+  else if (change >= 5) score += 30;
+  else if (change >= 3) score += 20;
+  // High in range = momentum still going
+  if (rangePos >= 0.65) score += 25;
+  else if (rangePos >= 0.50) score += 15;
+  // High volume = real buying
+  if (volINR >= 5000000) score += 25;
+  else if (volINR >= 2000000) score += 15;
+  else if (volINR >= 1000000) score += 8;
+  // Trades on both pairs = more interest
+  if (hasBoth) score += 10;
+
+  return Math.min(100, score);
+}
+
+export function scoreCoin(coin, slotType, marketContext) {
   var type = slotType || "B";
   var slotConfig = strategy["slot" + type] || strategy.slotB;
   var gecko = coin.geckoData || {};
   var w = strategy.weights;
+  var ctx = marketContext || { marketMode: "NEUTRAL", btcChange: 0 };
+
+  // Use dip scoring for slot D
+  if (type === "D") {
+    var dipScore = scoreDipBuy(coin);
+    var signal;
+    if (dipScore >= 75) signal = "STRONG BUY";
+    else if (dipScore >= 55) signal = "BUY";
+    else if (dipScore >= 35) signal = "WATCH";
+    else signal = "WEAK";
+    return {
+      score: dipScore,
+      signal: signal,
+      breakdown: { dipScore: dipScore },
+    };
+  }
+
+  // Use runner scoring for slot R
+  if (type === "R") {
+    var runScore = scoreRunner(coin);
+    var signal;
+    if (runScore >= 75) signal = "STRONG BUY";
+    else if (runScore >= 55) signal = "BUY";
+    else if (runScore >= 35) signal = "WATCH";
+    else signal = "WEAK";
+    return {
+      score: runScore,
+      signal: signal,
+      breakdown: { runScore: runScore },
+    };
+  }
 
   var s_change = scoreChange24h(coin.change24h, slotConfig);
   var s_range = scoreRangePosition(coin.rangePosition, slotConfig);
@@ -71,6 +149,24 @@ export function scoreCoin(coin, slotType) {
     s_volatility * w.volatility
   ) / totalWeight;
 
+  // Bonuses
+  var bonuses = 0;
+
+  // Cross-pair bonus — coin trades on both INR and USDT
+  if (coin.hasBothPairs) bonuses += w.crossPairBonus;
+
+  // BTC decoupled bonus — coin rising while BTC falling = strong alt signal
+  if (ctx.btcChange < -2 && coin.change24h > 2) bonuses += w.btcDecoupledBonus;
+
+  // Volume rising bonus — high absolute volume
+  if (coin.volumeINR >= 5000000) bonuses += w.volumeRisingBonus;
+  else if (coin.volumeINR >= 2000000) bonuses += w.volumeRisingBonus * 0.5;
+
+  // Market mode boosts
+  if (ctx.marketMode === "ROTATION" && coin.change24h > 0) bonuses += 5;
+  if (ctx.marketMode === "ALT SEASON" && coin.change24h > 3) bonuses += 8;
+
+  // Pattern bonuses from gecko
   var patternBonus = 0;
   if (gecko.spikePattern && gecko.spikePattern.hasPattern && gecko.spikePattern.isDue) {
     patternBonus += w.patternBonus;
@@ -83,7 +179,7 @@ export function scoreCoin(coin, slotType) {
   }
 
   var trendMediumBonus = gecko.trendMedium === "UP" ? 5 : 0;
-  var finalScore = Math.min(100, parseFloat((rawScore + patternBonus + trendMediumBonus).toFixed(1)));
+  var finalScore = Math.min(100, parseFloat((rawScore + bonuses + patternBonus + trendMediumBonus).toFixed(1)));
 
   var signal;
   if (finalScore >= 78) signal = "STRONG BUY";
@@ -101,16 +197,18 @@ export function scoreCoin(coin, slotType) {
       volumeRatio: parseFloat(s_volume.toFixed(1)),
       trendShort: parseFloat(s_trendShort.toFixed(1)),
       volatility: parseFloat(s_volatility.toFixed(1)),
+      crossPairBonus: coin.hasBothPairs ? w.crossPairBonus : 0,
+      btcDecoupledBonus: (ctx.btcChange < -2 && coin.change24h > 2) ? w.btcDecoupledBonus : 0,
       patternBonus: parseFloat(patternBonus.toFixed(1)),
       trendMediumBonus: parseFloat(trendMediumBonus.toFixed(1)),
     },
   };
 }
 
-export function scoreAllCoins(coins, slotType) {
+export function scoreAllCoins(coins, slotType, marketContext) {
   return coins
     .map(function(coin) {
-      return Object.assign({}, coin, { scoring: scoreCoin(coin, slotType) });
+      return Object.assign({}, coin, { scoring: scoreCoin(coin, slotType, marketContext) });
     })
     .sort(function(a, b) { return b.scoring.score - a.scoring.score; });
 }
