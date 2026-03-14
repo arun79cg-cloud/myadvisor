@@ -47,13 +47,7 @@ export default function Dashboard() {
           }
         }
 
-        setLoadingStep("Enriching with CoinGecko data...");
-        return enrichWithCoinGecko(symbols).then(function(geckoData) {
-          var enrichedResult = runFullPipeline(coindcxData, geckoData, userSettings);
-          setBuckets(enrichedResult);
-          setLastUpdated(new Date());
-          setLoadingStep("");
-        });
+        setLoadingStep("");
       })
       .catch(function(err) {
         setError("Error loading data: " + err.message);
