@@ -23,7 +23,7 @@ function scoreRangePosition(position, slotConfig) {
 }
 
 function scoreVolumeRatio(ratio, slotConfig) {
-  if (ratio === null || ratio === undefined) return 25;
+  if (ratio === null || ratio === undefined) return 50;
   var min = slotConfig.minVolumeRatio;
   if (ratio < 0.5) return 5;
   if (ratio < min) return 30;
@@ -35,12 +35,12 @@ function scoreVolumeRatio(ratio, slotConfig) {
 
 function scoreTrend(trend) {
   if (trend === "UP") return 100;
-  if (trend === "UNKNOWN") return 45;
-  return 0;
+  if (trend === "UNKNOWN") return 50;
+  return 50;
 }
 
 function scoreVolatility(volatilityPct, slotConfig) {
-  if (volatilityPct === null || volatilityPct === undefined) return 30;
+  if (volatilityPct === null || volatilityPct === undefined) return 50;
   var min = slotConfig.minVolatilityPct;
   if (volatilityPct < min * 0.5) return 10;
   if (volatilityPct < min) return 40;
