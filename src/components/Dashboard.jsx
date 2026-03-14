@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { fetchCoinDCXData } from "../api/coindcx";
+import { fetchCoinDCXData, fetchMarketContext } from "../api/coindcx";
 import { enrichWithCoinGecko } from "../api/coingecko";
 import { runFullPipeline, analyzeWatchlist } from "../engine/buckets";
 import StatsBar from "./StatsBar";
@@ -10,7 +10,7 @@ import ControlPanel from "./ControlPanel";
 
 export default function Dashboard() {
   var [allCoins, setAllCoins] = useState([]);
-  var [buckets, setBuckets] = useState({ B: [], A: [], C: [], summary: null, allCoins: [] });
+  var [buckets, setBuckets] = useState({ B: [], A: [], C: [], D: [], R: [], summary: null, allCoins: [] });
   var [loading, setLoading] = useState(true);
   var [loadingStep, setLoadingStep] = useState("");
   var [error, setError] = useState(null);
@@ -21,32 +21,33 @@ export default function Dashboard() {
   var [quoteFilter, setQuoteFilter] = useState("ALL");
   var [watchlist, setWatchlist] = useState([]);
   var [watchlistCoins, setWatchlistCoins] = useState([]);
-  var [userSettings, setUserSettings] = useState({ totalCapital: 5000, coinsPerSlot: 3, amountPerCoinOverride: null });
+  var [marketContext, setMarketContext] = useState({ marketMode: "NEUTRAL", btcChange: 0, btcPrice: 0, usdtRate: 86 });
+  var [userSettings, setUserSettings] = useState({
+    capitalINR: 2500,
+    capitalUSDT: 30,
+    coinsPerSlot: 3,
+    amountPerCoinOverride: null,
+  });
 
   var loadData = useCallback(function() {
-    setLoading(prev => allCoins.length === 0);
+    // Only show full loading spinner on very first load
+    setLoading(function(prev) { return allCoins.length === 0 ? true : prev; });
     setError(null);
-    setLoadingStep("Fetching live prices from CoinDCX...");
+    setLoadingStep("Fetching live prices...");
 
-    fetchCoinDCXData()
-      .then(function(coindcxData) {
+    Promise.all([fetchCoinDCXData(), fetchMarketContext()])
+      .then(function(results) {
+        var coindcxData = results[0];
+        var ctx = results[1];
+
         setAllCoins(coindcxData);
-        setLoadingStep("Running initial analysis...");
-        var quickResult = runFullPipeline(coindcxData, {}, userSettings);
+        setMarketContext(ctx);
+        setLoadingStep("Analyzing signals...");
+
+        var quickResult = runFullPipeline(coindcxData, {}, userSettings, ctx);
         setBuckets(quickResult);
         setLastUpdated(new Date());
         setLoading(false);
-
-        var symbols = [];
-        var seen = {};
-        for (var i = 0; i < coindcxData.length && symbols.length < 60; i++) {
-          var base = coindcxData[i].base;
-          if (!seen[base]) {
-            seen[base] = true;
-            symbols.push(base);
-          }
-        }
-
         setLoadingStep("");
       })
       .catch(function(err) {
@@ -54,7 +55,7 @@ export default function Dashboard() {
         setLoading(false);
         setLoadingStep("");
       });
-  }, [userSettings]);
+  }, [userSettings, allCoins.length]);
 
   useEffect(function() {
     loadData();
@@ -64,12 +65,12 @@ export default function Dashboard() {
 
   useEffect(function() {
     if (watchlist.length > 0 && buckets.allCoins && buckets.allCoins.length > 0) {
-      var analyzed = analyzeWatchlist(buckets.allCoins, watchlist, userSettings);
+      var analyzed = analyzeWatchlist(buckets.allCoins, watchlist, userSettings, marketContext);
       setWatchlistCoins(analyzed);
     } else {
       setWatchlistCoins([]);
     }
-  }, [watchlist, buckets.allCoins, userSettings]);
+  }, [watchlist, buckets.allCoins, userSettings, marketContext]);
 
   function filterCoins(coins) {
     return (coins || []).filter(function(coin) {
@@ -85,17 +86,33 @@ export default function Dashboard() {
   var filteredB = filterCoins(buckets.B);
   var filteredA = filterCoins(buckets.A);
   var filteredC = filterCoins(buckets.C);
+  var filteredD = filterCoins(buckets.D);
+  var filteredR = filterCoins(buckets.R);
   var filteredW = filterCoins(watchlistCoins);
+
   var topGainer = allCoins.slice().sort(function(a, b) { return b.change24h - a.change24h; })[0] || null;
   var topLoser = allCoins.slice().sort(function(a, b) { return a.change24h - b.change24h; })[0] || null;
   var gainers = allCoins.filter(function(c) { return c.change24h > 0; }).length;
   var losers = allCoins.filter(function(c) { return c.change24h < 0; }).length;
   var availableSymbols = allCoins.map(function(c) { return c.base; });
-  var hasResults = filteredB.length > 0 || filteredA.length > 0 || filteredC.length > 0 || filteredW.length > 0;
+
+  var hasResults = filteredB.length > 0 || filteredA.length > 0 || filteredC.length > 0 ||
+    filteredD.length > 0 || filteredR.length > 0 || filteredW.length > 0;
 
   function showSlot(type) {
     return slotFilter === "ALL" || slotFilter === type;
   }
+
+  var modeColors = {
+    "PANIC": "#ff5252",
+    "CAUTION": "#ff9100",
+    "NEUTRAL": "#607d8b",
+    "ROTATION": "#00e5ff",
+    "ALT SEASON": "#00e676",
+  };
+
+  var modeColor = modeColors[marketContext.marketMode] || "#607d8b";
+
   return (
     <div className="wrapper">
 
@@ -105,6 +122,20 @@ export default function Dashboard() {
           <div className="subtitle">Decision-support tool · You trade manually on CoinDCX · All risks are yours</div>
         </div>
         <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+          {/* Market Mode Badge */}
+          <span className="badge" style={{ color: modeColor, borderColor: modeColor + "44", fontWeight: 700 }}>
+            {marketContext.marketMode}
+          </span>
+          {/* BTC Price */}
+          {marketContext.btcPrice > 0 && (
+            <span className="badge">
+              {"BTC " + (marketContext.btcChange >= 0 ? "+" : "") + marketContext.btcChange.toFixed(1) + "%"}
+            </span>
+          )}
+          {/* USDT Rate */}
+          <span className="badge">
+            {"1 USDT = ₹" + marketContext.usdtRate.toFixed(1)}
+          </span>
           {lastUpdated && (
             <span className="badge">{"Updated: " + lastUpdated.toLocaleTimeString("en-IN")}</span>
           )}
@@ -117,9 +148,20 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* PANIC mode warning */}
+      {marketContext.marketMode === "PANIC" && (
+        <div className="error-box">
+          ⚠ PANIC MODE — BTC is down {Math.abs(marketContext.btcChange).toFixed(1)}% in 24h.
+          Buy signals are suppressed. Only Dip Buy opportunities are shown.
+        </div>
+      )}
+
       {error && <div className="error-box">{"⚠ " + error}</div>}
 
-      <ControlPanel onSettingsChange={function(s) { setUserSettings(s); }} />
+      <ControlPanel
+        onSettingsChange={function(s) { setUserSettings(s); }}
+        usdtRate={marketContext.usdtRate}
+      />
 
       {loading ? (
         <div className="loading-box">
@@ -138,6 +180,7 @@ export default function Dashboard() {
             slotSummary={buckets.summary}
             lastUpdated={lastUpdated}
             isLoading={loading}
+            marketContext={marketContext}
           />
 
           <SearchFilter
@@ -175,6 +218,14 @@ export default function Dashboard() {
 
           {showSlot("A") && (
             <BucketPanel slotType="A" coins={filteredA} defaultExpanded={true} />
+          )}
+
+          {showSlot("R") && (
+            <BucketPanel slotType="R" coins={filteredR} defaultExpanded={true} />
+          )}
+
+          {showSlot("D") && (
+            <BucketPanel slotType="D" coins={filteredD} defaultExpanded={true} />
           )}
 
           {showSlot("C") && (
