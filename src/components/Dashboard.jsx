@@ -24,7 +24,7 @@ export default function Dashboard() {
   var [userSettings, setUserSettings] = useState({ totalCapital: 5000, coinsPerSlot: 3, amountPerCoinOverride: null });
 
   var loadData = useCallback(function() {
-    setLoading(true);
+    setLoading(prev => allCoins.length === 0);
     setError(null);
     setLoadingStep("Fetching live prices from CoinDCX...");
 
